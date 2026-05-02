@@ -242,7 +242,8 @@ def load():
     return {}
 
 def save(d):
-    json.dump(d, open(FILE, "w"))
+    with open(FILE, "w") as f:  # Proper file handling
+        json.dump(d, f, indent=2)  # Added indent for readability
 
 users = load()
 
