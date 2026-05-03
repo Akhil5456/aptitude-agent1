@@ -115,7 +115,7 @@ setInterval(fixMultiselect, 500);
 """, unsafe_allow_html=True)
 
 # ----------- API KEY ----------- #
-API_KEY = "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"
+API_KEY = "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"
 
 def ask_gemini(q):
     try:
@@ -242,8 +242,8 @@ def load():
     return {}
 
 def save(d):
-    with open(FILE, "w") as f:  # Proper file handling
-        json.dump(d, f, indent=2)  # Added indent for readability
+    with open(FILE, "w") as f:
+        json.dump(d, f, indent=2)
 
 users = load()
 
@@ -417,395 +417,158 @@ def update_difficulty(correct, current_level):
             return current_level - 1
     return current_level
 
+def gen_ai_question(topic, level):
+    """Generate AI-powered questions with level-based complexity"""
+    
+    # Define complexity based on level
+    level_prompts = {
+        1: "Generate a simple 1-2 line scenario question",
+        2: "Generate a medium 2-3 line scenario question", 
+        3: "Generate a moderate 3-4 line scenario question",
+        4: "Generate a complex 4-5 line scenario question",
+        5: "Generate a very complex 5-6 line scenario question"
+    }
+    
+    prompt = f"""
+    {level_prompts.get(level, "Generate a scenario question")} for {topic} aptitude.
+    
+    Requirements:
+    - Create a realistic business/company scenario
+    - Provide a clear question with numerical answer
+    - Make it suitable for competitive exams
+    - Answer should be a single number or simple value
+    - Include 4 multiple choice options (1 correct, 3 wrong but plausible)
+    
+    Format your response as JSON:
+    {{
+        "question": "Your scenario question here",
+        "answer": "correct answer",
+        "options": ["correct", "wrong1", "wrong2", "wrong3"]
+    }}
+    """
+    
+    try:
+        response = ask_gemini(prompt)
+        
+        # Try to extract JSON from response
+        import re
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            import json
+            data = json.loads(json_match.group())
+            return {
+                "q": data.get("question", ""),
+                "a": str(data.get("answer", "")),
+                "o": [str(opt) for opt in data.get("options", [])],
+                "t": topic
+            }
+        else:
+            # Fallback if JSON parsing fails
+            return gen_fallback_question(topic, level)
+            
+    except Exception as e:
+        # Fallback if AI fails
+        return gen_fallback_question(topic, level)
+
+def gen_fallback_question(topic, level):
+    """Fallback question generator when AI fails"""
+    
+    fallback_questions = {
+        "Percentages": {
+            1: ("What is 20% of 100?", "20", ["20", "30", "40", "50"]),
+            2: ("A product costs $200. With 10% discount, what's the price?", "180", ["180", "190", "200", "210"]),
+            3: ("Salary was $5000, increased by 15%. New salary?", "5750", ["5750", "5500", "5250", "6000"]),
+            4: ("Company revenue $100K grew by 25% then decreased by 10%. Final revenue?", "112500", ["112500", "115000", "110000", "105000"]),
+            5: ("Investment $50K grew 20% year 1, lost 15% year 2, gained 25% year 3. Final amount?", "63750", ["63750", "65000", "62500", "60000"])
+        },
+        "Ratios": {
+            1: ("Ratio 2:3, total 50. First part?", "20", ["20", "30", "25", "15"]),
+            2: ("Partners invest 3:2, profit $5000. First partner's share?", "3000", ["3000", "2000", "2500", "1500"]),
+            3: ("Mixture ratio 4:5, total 180L. Quantity of first liquid?", "80", ["80", "100", "90", "70"]),
+            4: ("Three partners 2:3:5, investment $200K. Largest share?", "100000", ["100000", "80000", "60000", "40000"]),
+            5: ("Complex ratio problem with profit sharing and working hours", "45000", ["45000", "50000", "40000", "35000"])
+        },
+        "Profit & Loss": {
+            1: ("Cost $50, sold for $60. Profit percentage?", "20%", ["20%", "10%", "30%", "25%"]),
+            2: ("CP $100, SP $120. Profit %?", "20%", ["20%", "15%", "25%", "30%"]),
+            3: ("Markup 25%, discount 10%. Net profit %?", "12.5%", ["12.5%", "15%", "10%", "20%"]),
+            4: ("Loss 20%, then gain 30%. Overall result?", "4% gain", ["4% gain", "4% loss", "10% gain", "10% loss"]),
+            5: ("Complex profit-loss with multiple transactions", "15.5%", ["15.5%", "16.5%", "14.5%", "17.5%"])
+        }
+    }
+    
+    # Get fallback for topic and level
+    if topic in fallback_questions and level in fallback_questions[topic]:
+        q_data = fallback_questions[topic][level]
+        return {"q": q_data[0], "a": q_data[1], "o": q_data[2], "t": topic}
+    else:
+        # Generic fallback
+        return {
+            "q": f"Solve: {level * 10} + {level * 5} = ?",
+            "a": str(level * 15),
+            "o": [str(level * 15), str(level * 16), str(level * 14), str(level * 13)],
+            "t": topic
+        }
+
 def gen_q(category_topic, user_level=3):
-    """Generate scenario-based questions for comprehensive aptitude topics with adaptive difficulty"""
+    """Generate AI-powered questions for comprehensive aptitude topics"""
     
     # Parse category and topic
     parts = category_topic.split(" - ")
     main_cat = parts[0] if len(parts) > 0 else "Numerical Aptitude"
     topic = parts[1] if len(parts) > 1 else "Percentages"
     
-    params = get_difficulty_params(user_level)
-    low, high = params["numbers"]
-    
     # Track generated questions for uniqueness
     if "generated_questions" not in st.session_state:
         st.session_state.generated_questions = set()
     
-    max_attempts = 50
+    # Track level-specific questions to prevent repetition across levels
+    if "level_questions" not in st.session_state:
+        st.session_state.level_questions = {1: set(), 2: set(), 3: set(), 4: set(), 5: set()}
+    
+    max_attempts = 10
     attempts = 0
     
     while attempts < max_attempts:
         attempts += 1
-        q, ans, o = None, None, []
         
-        # NUMERICAL APTITUDE
-        if topic == "Number Systems":
-            scenarios = [
-                ("A computer system uses ", "-bit binary numbers. How many unique addresses can it represent?"),
-                ("Find the LCM of ", " and ", " for scheduling two machines."),
-                ("In a library, books are arranged in groups of ", ". If there are ", " books total, how many complete groups?"),
-                ("A password uses ", " characters from ", " symbols. Total combinations?")
-            ]
-            if params["complexity"] == "basic":
-                a, b = random.randint(2, 20), random.randint(2, 20)
-                q = f"Find the HCF of {a} and {b}."
-                import math
-                ans = str(math.gcd(a, b))
-                o = [ans, str(a), str(b), str((a+b)//2)]
-            else:
-                bits = random.choice([8, 16, 32])
-                q = f"A computer system uses {bits}-bit binary numbers. How many unique addresses can it represent?"
-                ans = str(2**bits)
-                o = [ans, str(2**(bits-1)), str(2**(bits+1)), str(bits**2)]
-                
-        elif topic == "Fractions and Decimals":
-            if params["complexity"] == "basic":
-                a, b = random.randint(1, 9), random.randint(2, 9)
-                q = f"A recipe needs {a}/{b} cup of sugar. For {random.randint(2,5)} batches, how much sugar total?"
-                total = a * random.randint(2,5)
-                ans = f"{total}/{b}"
-                o = [ans, f"{total}/{b+1}", f"{total+1}/{b}", f"{a}/{b*2}"]
-            else:
-                d = random.choice([3, 6, 7, 9])
-                q = f"Convert 0.{str(d)*3}... to a fraction (recurring decimal)."
-                ans = f"{d}/9"
-                o = [ans, f"{d}/10", f"1/{d}", f"{d+1}/9"]
-                
-        elif topic == "Percentages":
-            scenarios = [
-                ("Company revenue was $", "M last year. With ", "% growth this year, what's the new revenue?"),
-                ("An employee earning $", "K gets a ", "% raise. New salary?"),
-                ("A $", " item has ", "% discount then ", "% tax. Final price?"),
-                ("Population: ", " people, growing at ", "% annually. After 2 years?")
-            ]
-            base = random.choice([50000, 100000, 250000, 500000])
-            pct = random.randint(10, 30)
-            if params["multi_step"]:
-                tax = random.randint(5, 18)
-                q = f"A ${base} laptop has {pct}% discount, then {tax}% tax. Final price?"
-                discounted = base * (100 - pct) / 100
-                final = discounted * (100 + tax) / 100
-                ans = f"${int(final)}"
-                o = [ans, f"${int(final+500)}", f"${int(final-500)}", f"${int(base * 0.9)}"]
-            else:
-                q = f"Company revenue was ${base} last year. With {pct}% growth, new revenue?"
-                new_rev = int(base * (100 + pct) / 100)
-                ans = f"${new_rev}"
-                o = [ans, f"${new_rev+1000}", f"${int(base * pct / 100)}", f"${base+pct}"]
-
-        elif topic == "Ratios and Proportions":
-            scenarios = [
-                ("Partners A and B invest in ratio ", ":", ". Profit $", " - A's share?"),
-                ("Mixture: liquid A to B is ", ":", ". Total ", "L. Quantity of A?"),
-                ("Map scale 1:", ". Real distance ", "km. Map distance in cm?"),
-                ("Division: $", " among 3 people in ratio ", ":", ":", " - largest share?")
-            ]
-            if params["complexity"] == "advanced":
-                a, b, c = 2, 3, 5
-                total = random.choice([10000, 20000, 50000])
-                q = f"Three partners invest in ratio {a}:{b}:{c}. Total investment ${total}. Largest share?"
-                largest = total * max(a,b,c) / (a+b+c)
-                ans = f"${int(largest)}"
-                o = [ans, f"${int(total/3)}", f"${int(total * 0.5)}", f"${int(total * 0.4)}"]
-            else:
-                a, b = 2, 3
-                total = random.randint(50, 200)
-                q = f"Mixture ratio {a}:{b}, total {total}L. Quantity of first liquid?"
-                qty = int(total * a / (a + b))
-                ans = f"{qty}L"
-                o = [ans, f"{total - qty}L", f"{total//2}L", f"{qty+5}L"]
-
-        elif topic == "Algebra":
-            if params["complexity"] == "basic":
-                a = random.randint(2, 5)
-                b = random.randint(10, 30)
-                q = f"Solve: {a}x + {b//a} = {b + random.randint(5,15)}. Find x."
-                ans = str(random.randint(2, 6))
-                o = [ans, str(int(ans)+1), str(int(ans)-1), str(int(ans)*2)]
-            else:
-                age_diff = random.randint(5, 15)
-                sum_age = random.randint(40, 80)
-                q = f"Father is {age_diff} years older than son. Sum of ages is {sum_age}. Father's age?"
-                father = (sum_age + age_diff) // 2
-                ans = str(father)
-                o = [ans, str(father + 5), str(father - 5), str(sum_age // 2)]
-
-        elif topic == "Geometry":
-            scenarios = [
-                ("Rectangular field: length ", "m, breadth ", "m. Area and cost at $", "/sq m?"),
-                ("Circular pond: radius ", "m. Fence cost at $", "/meter?"),
-                ("Cube: edge ", "cm. Volume and surface area?"),
-                ("Cylinder: radius ", "cm, height ", "cm. Volume?")
-            ]
-            if "Rectangular" in scenarios[0][0]:
-                l, b = random.randint(20, 100), random.randint(15, 60)
-                rate = random.randint(5, 15)
-                q = f"Rectangular field: length {l}m, breadth {b}m. Cost to fence at ${rate}/meter?"
-                perimeter = 2 * (l + b)
-                cost = perimeter * rate
-                ans = f"${cost}"
-                o = [ans, f"${l*b*rate}", f"${(l+b)*rate}", f"${cost+100}"]
-            else:
-                r = random.randint(5, 20)
-                q = f"Circular garden: radius {r}m. Area for planting?"
-                area = int(3.14159 * r * r)
-                ans = f"{area} sq m"
-                o = [ans, f"{int(2*3.14159*r)} sq m", f"{r*r} sq m", f"{2*area} sq m"]
-
-        elif topic == "Trigonometry":
-            height = random.randint(30, 100)
-            angle = random.choice([30, 45, 60])
-            q = f"Building height {height}m. Sun angle {angle}°. Shadow length?"
-            import math
-            if angle == 30:
-                shadow = int(height * 1.732)
-            elif angle == 45:
-                shadow = height
-            else:
-                shadow = int(height / 1.732)
-            ans = f"{shadow}m"
-            o = [ans, f"{shadow+10}m", f"{int(height/2)}m", f"{height}m"]
-
-        elif topic == "Statistics":
-            if params["complexity"] == "basic":
-                scores = [random.randint(60, 95) for _ in range(5)]
-                q = f"Test scores: {scores}. Mean score?"
-                mean = sum(scores) // len(scores)
-                ans = str(mean)
-                o = [ans, str(max(scores)), str(min(scores)), str((max(scores)+min(scores))//2)]
-            else:
-                n = random.randint(10, 20)
-                total = random.randint(500, 1000)
-                mean = total // n
-                new_mean = mean + random.randint(2, 5)
-                q = f"{n} students average {mean}. New student joins, average becomes {new_mean}. New student's marks?"
-                new_total = new_mean * (n + 1)
-                new_student = new_total - total
-                ans = str(new_student)
-                o = [ans, str(new_mean), str(mean + new_mean), str(total // (n+1))]
-
-        elif topic == "Data Interpretation":
-            # Simulate chart reading
-            categories = ["Product A", "Product B", "Product C", "Product D"]
-            values = [random.randint(20, 80) for _ in range(4)]
-            total = sum(values)
-            q = f"Sales chart (units): A={values[0]}, B={values[1]}, C={values[2]}, D={values[3]}. What % is Product A of total?"
-            pct = int(values[0] * 100 / total)
-            ans = f"{pct}%"
-            o = [ans, f"{values[0]}%", f"{int(values[0]*100/max(values))}%", f"{25}%"]
-
-        # VERBAL APTITUDE
-        elif topic == "Vocabulary":
-            words = {
-                "happy": ["joyful", "sad", "angry", "calm"],
-                "fast": ["quick", "slow", "steady", "rapid"],
-                "big": ["large", "small", "tiny", "huge"]
+        # Generate AI question
+        question_data = gen_ai_question(topic, user_level)
+        
+        # Check if this question is unique across all levels
+        question_key = f"{topic}:{question_data['q'][:50]}"  # First 50 chars as key
+        
+        is_unique = True
+        for level_questions in st.session_state.level_questions.values():
+            if question_key in level_questions:
+                is_unique = False
+                break
+        
+        if is_unique:
+            # Add to current level's question set
+            st.session_state.level_questions[user_level].add(question_key)
+            st.session_state.generated_questions.add(question_data['q'])
+            
+            # Ensure 4 options
+            if len(question_data['o']) < 4:
+                # Add random options
+                while len(question_data['o']) < 4:
+                    question_data['o'].append(str(random.randint(1, 100)))
+            
+            # Shuffle options but keep track of correct answer
+            correct_ans = question_data['a']
+            options = question_data['o'][:4]
+            random.shuffle(options)
+            
+            return {
+                "q": question_data['q'], 
+                "a": correct_ans, 
+                "o": options, 
+                "t": topic
             }
-            word = random.choice(list(words.keys()))
-            w_type = random.choice(["synonym", "antonym"])
-            if w_type == "synonym":
-                q = f"Select the synonym for '{word}'."
-                ans = words[word][0]
-            else:
-                q = f"Select the antonym for '{word}'."
-                ans = words[word][1]
-            o = words[word]
-            random.shuffle(o)
-
-        elif topic == "Reading Comprehension":
-            passages = [
-                "A company implemented AI to improve customer service. Response times decreased by 40% while satisfaction scores increased by 25%. However, 15% of staff were reassigned.",
-                "Research shows that remote work increases productivity by 13% on average. Employees report higher satisfaction but face challenges with work-life boundaries."
-            ]
-            passage = random.choice(passages)
-            questions = [
-                ("What was the main outcome mentioned?", "Productivity improvement" if "productivity" in passage else "Service improvement", ["Cost reduction", "Staff increase", "Service improvement", "Productivity improvement"]),
-                ("What challenge is mentioned?", "Work-life balance" if "remote" in passage else "Staff reassignment", ["Technology failure", "Staff reassignment", "Budget issues", "Work-life balance"])
-            ]
-            q_data = random.choice(questions)
-            q = f"Passage: '{passage[:50]}...' Question: {q_data[0]}"
-            ans = q_data[1]
-            o = q_data[2]
-
-        elif topic == "Grammar":
-            errors = [
-                ("The team are working on the project.", "The team is working on the project.", "Subject-verb agreement"),
-                ("She don't like coffee.", "She doesn't like coffee.", "Auxiliary verb"),
-                ("Between you and I, this is wrong.", "Between you and me, this is wrong.", "Pronoun case")
-            ]
-            err = random.choice(errors)
-            q = f"Find the error: '{err[0]}' What type?"
-            ans = err[2]
-            o = [err[2], "Tense error", "Article error", "Preposition error"]
-
-        elif topic == "Analogies":
-            analogies = [
-                ("Book : Read :: Food : ?", "Eat", ["Cook", "Eat", "Buy", "Serve"]),
-                ("Doctor : Hospital :: Teacher : ?", "School", ["Classroom", "School", "Book", "Student"]),
-                ("Car : Road :: Boat : ?", "Water", ["Sea", "River", "Water", "Ocean"])
-            ]
-            an = random.choice(analogies)
-            q = an[0]
-            ans = an[1]
-            o = an[2]
-
-        # LOGICAL REASONING
-        elif topic == "Blood Relations":
-            relations = [
-                ("A is B's father's only daughter. How is A related to B?", "Sister", ["Mother", "Sister", "Aunt", "Cousin"]),
-                ("Pointing to a photo: 'His father is my father's son.' Who is in the photo?", "Son", ["Brother", "Son", "Father", "Uncle"]),
-                ("If P's mother is Q's father's sister, how is Q related to P?", "Cousin", ["Brother", "Sister", "Cousin", "Uncle"])
-            ]
-            rel = random.choice(relations)
-            q = rel[0]
-            ans = rel[1]
-            o = rel[2]
-
-        elif topic == "Coding and Decoding":
-            coding = [
-                ("If TEACHER is coded as UFBDIIFS, how is STUDENT coded?", "TUVEFOU", ["TUVEFOU", "TSVCFOU", "TUVFNOU", "TTUDFOU"]),
-                ("In a code, CAT = 312, DOG = 4157. What is FISH?", "6918", ["6918", "69108", "6819", "69108"])
-            ]
-            code = random.choice(coding)
-            q = code[0]
-            ans = code[1]
-            o = code[2]
-
-        elif topic == "Directions and Distances":
-            dirs = [
-                ("Walk 5km north, 3km east, 5km south. Distance from start?", "3km", ["3km", "5km", "8km", "13km"]),
-                ("Facing east, turn right, then 180°. Final direction?", "West", ["North", "South", "East", "West"])
-            ]
-            d = random.choice(dirs)
-            q = d[0]
-            ans = d[1]
-            o = d[2]
-
-        elif topic == "Syllogisms" or topic == "Deductive Reasoning":
-            syllogisms = [
-                ("All managers are leaders. Some leaders are innovators. Conclusion?", "Some managers may be innovators", ["All managers are innovators", "Some managers may be innovators", "No manager is innovator", "All innovators are managers"]),
-                ("No laptop is a phone. All phones are smart devices. Conclusion?", "Some smart devices are not laptops", ["All smart devices are laptops", "Some smart devices are not laptops", "No smart device is laptop", "All laptops are smart devices"])
-            ]
-            syl = random.choice(syllogisms)
-            q = syl[0]
-            ans = syl[1]
-            o = syl[2]
-
-        elif topic == "Inductive Reasoning":
-            series = [
-                ("2, 6, 12, 20, 30, ?", "42", ["36", "40", "42", "44"]),
-                ("1, 1, 2, 3, 5, 8, ?", "13", ["11", "12", "13", "14"]),
-                ("A, C, E, G, ?", "I", ["H", "I", "J", "K"])
-            ]
-            ser = random.choice(series)
-            q = f"Complete the series: {ser[0]}"
-            ans = ser[1]
-            o = ser[2]
-
-        # NON-VERBAL APTITUDE
-        elif topic in ["Visual Reasoning", "Pattern Recognition", "Abstract Reasoning"]:
-            patterns = [
-                ("Shape sequence: Triangle → Square → Pentagon → ?", "Hexagon", ["Circle", "Hexagon", "Octagon", "Rectangle"]),
-                ("Rotation: 90° → 180° → 270° → ?", "360°", ["300°", "360°", "45°", "0°"]),
-                ("Number of sides: 3, 4, 5, 6, ?", "7", ["6", "7", "8", "9"])
-            ]
-            pat = random.choice(patterns)
-            q = pat[0]
-            ans = pat[1]
-            o = pat[2]
-
-        elif topic in ["Spatial Reasoning", "Paper Folding and Cutting"]:
-            spatial = [
-                ("Cube has how many faces?", "6", ["4", "5", "6", "8"]),
-                ("Paper folded twice, one hole punched. How many holes when unfolded?", "4", ["2", "3", "4", "1"]),
-                ("Cylinder: radius 3cm, height 10cm. Volume? (π=3.14)", "282.6", ["282.6", "188.4", "94.2", "314"])
-            ]
-            sp = random.choice(spatial)
-            q = sp[0]
-            ans = sp[1]
-            o = sp[2]
-
-        elif topic == "Mirror Images":
-            mirrors = [
-                ("Mirror shows 3:15. Real time?", "8:45", ["8:45", "9:45", "3:15", "2:45"]),
-                ("Word 'MUM' in mirror looks like?", "MUM", ["MUM", "MWM", "WUW", "WOW"])
-            ]
-            mir = random.choice(mirrors)
-            q = mir[0]
-            ans = mir[1]
-            o = mir[2]
-
-        # DATA ANALYSIS
-        elif topic == "Data Sufficiency":
-            sufficiency = [
-                ("Is x > y? (1) x² > y² (2) x > 0", "Both together", ["Statement 1 alone", "Statement 2 alone", "Both together", "Neither"]),
-                ("What is A's age? (1) B is 5 years older (2) C is 10 years younger than B", "Both together", ["Statement 1 alone", "Statement 2 alone", "Both together", "Neither"])
-            ]
-            suff = random.choice(sufficiency)
-            q = suff[0]
-            ans = suff[1]
-            o = suff[2]
-
-        elif topic in ["Data Visualization", "Graphical Analysis", "Table Analysis"]:
-            # Create realistic data analysis scenario
-            months = ["Jan", "Feb", "Mar", "Apr", "May"]
-            sales = [random.randint(100, 200) for _ in range(5)]
-            q = f"Sales data (units): {dict(zip(months, sales))}. Which month had {max(sales)}% of peak sales?"
-            peak = max(sales)
-            target = int(peak * 0.8)
-            closest_month = months[sales.index(min(sales, key=lambda x: abs(x - target)))]
-            ans = closest_month
-            o = months
-
-        elif topic == "Statistical Analysis" or topic == "Data Mining":
-            stats = [
-                (f"Dataset: {[random.randint(10,50) for _ in range(6)]}. Range?", "calculate", "range"),
-                (f"Coin tossed 3 times. Probability of 2 heads?", "3/8", ["3/8", "1/2", "1/4", "3/4"])
-            ]
-            stat = random.choice(stats)
-            if stat[2] == "range":
-                data = [random.randint(10, 50) for _ in range(6)]
-                q = f"Dataset: {data}. What is the range?"
-                ans = str(max(data) - min(data))
-                o = [ans, str(max(data)), str(min(data)), str(sum(data)//len(data))]
-            else:
-                q = stat[0]
-                ans = stat[1]
-                o = stat[2] if len(stat) > 2 else ["3/8", "1/2", "1/4", "3/4"]
-
-        elif topic in ["Case Studies", "Business Scenario Analysis"]:
-            business = [
-                ("Company: Revenue $1M, Costs $750K. Profit margin?", "25%", ["25%", "33%", "20%", "75%"]),
-                ("Break-even: Fixed cost $50000, Unit cost $10, Price $25. Break-even units?", "3333", ["2000", "3333", "5000", "2500"]),
-                ("ROI: Invest $100K, Return $125K in 2 years. Annual ROI?", "12.5%", ["25%", "12.5%", "10%", "20%"])
-            ]
-            biz = random.choice(business)
-            q = biz[0]
-            ans = biz[1]
-            o = biz[2]
-
-        # Fallback
-        else:
-            q = f"Solve: {random.randint(10, 50)} + {random.randint(20, 80)} = ?"
-            ans = str(int(q.split()[1]) + int(q.split()[3]))
-            o = [ans, str(int(ans)+10), str(int(ans)-10), str(int(ans)+5)]
-
-        # Ensure uniqueness
-        if q and q not in st.session_state.generated_questions:
-            st.session_state.generated_questions.add(q)
-            o = list(set(o))
-            while len(o) < 4:
-                o.append(str(random.randint(1, 100)))
-            random.shuffle(o)
-            return {"q": q, "a": ans, "o": o[:4], "t": topic}
     
-    # Fallback if unique question not found
-    q = f"Calculate: {random.randint(10, 99)} × {random.randint(2, 9)} = ?"
-    ans = str(eval(q.split()[1]) * eval(q.split()[3]))
-    o = [ans, str(int(ans)+10), str(int(ans)-10), str(int(ans)*2)]
-    random.shuffle(o)
-    return {"q": q, "a": ans, "o": o, "t": topic}
+    # Fallback if AI generation fails
+    return gen_fallback_question(topic, user_level)
 
 # ----------- HOME ----------- #
 if st.session_state.page=="home":
