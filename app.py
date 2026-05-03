@@ -418,7 +418,7 @@ def update_difficulty(correct, current_level):
     return current_level
 
 def gen_ai_question(topic, level):
-    """Generate AI-powered questions with level-based complexity"""
+    """Generate AI-powered questions with level-based complexity for ALL topics"""
     
     # Define complexity based on level
     level_prompts = {
@@ -429,15 +429,65 @@ def gen_ai_question(topic, level):
         5: "Generate a very complex 5-6 line scenario question"
     }
     
+    # Define topic-specific requirements
+    topic_requirements = {
+        "Number Systems": "Focus on LCM, HCF, number properties, binary systems",
+        "Fractions and Decimals": "Focus on operations, conversions, comparisons",
+        "Percentages": "Focus on profit/loss, discounts, growth rates, calculations",
+        "Ratios and Proportions": "Focus on partnerships, mixtures, scaling, distributions",
+        "Algebra": "Focus on equations, word problems, age problems",
+        "Geometry": "Focus on area, volume, perimeter, shapes, measurements",
+        "Trigonometry": "Focus on heights, distances, angles, practical applications",
+        "Statistics": "Focus on mean, median, mode, probability, data analysis",
+        "Data Interpretation": "Focus on charts, graphs, tables, data reading",
+        "Vocabulary": "Focus on synonyms, antonyms, word meanings",
+        "Reading Comprehension": "Focus on passage analysis, inference, main ideas",
+        "Grammar": "Focus on error detection, sentence correction, parts of speech",
+        "Analogies": "Focus on relationships, patterns, logical connections",
+        "Blood Relations": "Focus on family relationships, logical deduction",
+        "Coding and Decoding": "Focus on letter/number codes, pattern recognition",
+        "Directions and Distances": "Focus on spatial reasoning, navigation, calculations",
+        "Syllogisms": "Focus on logical conclusions, deductive reasoning",
+        "Deductive Reasoning": "Focus on logical inference, conclusion drawing",
+        "Inductive Reasoning": "Focus on pattern completion, series, generalization",
+        "Visual Reasoning": "Focus on shapes, patterns, spatial visualization",
+        "Pattern Recognition": "Focus on sequences, arrangements, logical patterns",
+        "Abstract Reasoning": "Focus on non-verbal logic, conceptual thinking",
+        "Spatial Reasoning": "Focus on 3D visualization, rotations, transformations",
+        "Paper Folding and Cutting": "Focus on mental visualization, pattern prediction",
+        "Mirror Images": "Focus on reflection, symmetry, visual processing",
+        "Data Sufficiency": "Focus on logical analysis, information adequacy",
+        "Data Visualization": "Focus on chart interpretation, graphical analysis",
+        "Graphical Analysis": "Focus on graph reading, trend analysis",
+        "Table Analysis": "Focus on data tables, comparisons, calculations",
+        "Statistical Analysis": "Focus on statistical measures, data interpretation",
+        "Data Mining": "Focus on pattern recognition in data, insights",
+        "Case Studies": "Focus on business scenarios, decision making",
+        "Business Scenario Analysis": "Focus on real-world business problems, analysis",
+        "Time and Work": "Focus on efficiency, collaboration, time management",
+        "Time and Distance": "Focus on speed, time, relative motion problems",
+        "Simple Interest": "Focus on basic interest calculations, principal, rate, time",
+        "Compound Interest": "Focus on compound growth, multiple periods, calculations",
+        "Probability": "Focus on chance, likelihood, combinations, permutations",
+        "Permutations and Combinations": "Focus on arrangements, selections, counting",
+        "Averages": "Focus on mean calculations, weighted averages, data sets",
+        "Partnership": "Focus on business partnerships, profit sharing, investments"
+    }
+    
+    requirements = topic_requirements.get(topic, "Focus on aptitude problem solving")
+    
     prompt = f"""
     {level_prompts.get(level, "Generate a scenario question")} for {topic} aptitude.
     
+    Topic Focus: {requirements}
+    
     Requirements:
-    - Create a realistic business/company scenario
-    - Provide a clear question with numerical answer
+    - Create a realistic business/company or practical scenario
+    - Provide a clear question with numerical or specific answer
     - Make it suitable for competitive exams
-    - Answer should be a single number or simple value
+    - Answer should be a single number, percentage, or simple value
     - Include 4 multiple choice options (1 correct, 3 wrong but plausible)
+    - Ensure difficulty matches Level {level} complexity
     
     Format your response as JSON:
     {{
@@ -471,17 +521,17 @@ def gen_ai_question(topic, level):
         return gen_fallback_question(topic, level)
 
 def gen_fallback_question(topic, level):
-    """Fallback question generator when AI fails"""
+    """Fallback question generator when AI fails for ALL topics"""
     
     fallback_questions = {
         "Percentages": {
             1: ("What is 20% of 100?", "20", ["20", "30", "40", "50"]),
-            2: ("A product costs $200. With 10% discount, what's the price?", "180", ["180", "190", "200", "210"]),
+            2: ("A product costs $200. With 10% discount, what's price?", "180", ["180", "190", "200", "210"]),
             3: ("Salary was $5000, increased by 15%. New salary?", "5750", ["5750", "5500", "5250", "6000"]),
             4: ("Company revenue $100K grew by 25% then decreased by 10%. Final revenue?", "112500", ["112500", "115000", "110000", "105000"]),
             5: ("Investment $50K grew 20% year 1, lost 15% year 2, gained 25% year 3. Final amount?", "63750", ["63750", "65000", "62500", "60000"])
         },
-        "Ratios": {
+        "Ratios and Proportions": {
             1: ("Ratio 2:3, total 50. First part?", "20", ["20", "30", "25", "15"]),
             2: ("Partners invest 3:2, profit $5000. First partner's share?", "3000", ["3000", "2000", "2500", "1500"]),
             3: ("Mixture ratio 4:5, total 180L. Quantity of first liquid?", "80", ["80", "100", "90", "70"]),
@@ -494,6 +544,55 @@ def gen_fallback_question(topic, level):
             3: ("Markup 25%, discount 10%. Net profit %?", "12.5%", ["12.5%", "15%", "10%", "20%"]),
             4: ("Loss 20%, then gain 30%. Overall result?", "4% gain", ["4% gain", "4% loss", "10% gain", "10% loss"]),
             5: ("Complex profit-loss with multiple transactions", "15.5%", ["15.5%", "16.5%", "14.5%", "17.5%"])
+        },
+        "Number Systems": {
+            1: ("Find HCF of 12 and 18", "6", ["6", "12", "18", "24"]),
+            2: ("8-bit binary numbers. How many unique values?", "256", ["256", "128", "512", "64"]),
+            3: ("Find LCM of 15, 20, 25", "300", ["300", "150", "75", "600"]),
+            4: ("Convert 0.333... to fraction", "1/3", ["1/3", "33/100", "3/10", "1/2"]),
+            5: ("Complex number system problem with base conversions", "42", ["42", "36", "48", "54"])
+        },
+        "Algebra": {
+            1: ("Solve: 2x + 5 = 15", "5", ["5", "10", "7", "8"]),
+            2: ("Father is 30 years older than son. Sum is 50. Father's age?", "40", ["40", "35", "45", "30"]),
+            3: ("If x + y = 10 and x - y = 4, find x", "7", ["7", "6", "8", "5"]),
+            4: ("Quadratic: x² - 5x + 6 = 0. Positive root?", "3", ["3", "2", "6", "1"]),
+            5: ("Complex word problem with multiple variables", "25", ["25", "20", "30", "35"])
+        },
+        "Geometry": {
+            1: ("Rectangle: length 10m, width 5m. Area?", "50", ["50", "15", "30", "100"]),
+            2: ("Circle radius 7m. Area? (π=22/7)", "154", ["154", "44", "22", "308"]),
+            3: ("Cube edge 6cm. Surface area?", "216", ["216", "36", "108", "72"]),
+            4: ("Cylinder radius 3cm, height 10cm. Volume? (π=3.14)", "282.6", ["282.6", "94.2", "188.4", "314"]),
+            5: ("Complex geometry with multiple shapes", "120", ["120", "100", "140", "80"])
+        },
+        "Time and Work": {
+            1: ("A can do work in 10 days. B in 15 days. Together?", "6 days", ["6 days", "8 days", "12 days", "25 days"]),
+            2: ("Pipe fills tank in 4 hours, another in 6 hours. Together?", "2.4 hours", ["2.4 hours", "3 hours", "5 hours", "10 hours"]),
+            3: ("A works 8 hours/day, B 6 hours/day. Work ratio?", "4:3", ["4:3", "3:4", "2:3", "3:2"]),
+            4: ("Complex work problem with efficiency changes", "15 days", ["15 days", "12 days", "18 days", "20 days"]),
+            5: ("Very complex work scenario with multiple workers", "8 days", ["8 days", "10 days", "6 days", "12 days"])
+        },
+        "Data Interpretation": {
+            1: ("Sales: Jan=100, Feb=120, Mar=140. Growth % from Jan to Mar?", "40%", ["40%", "20%", "30%", "140%"]),
+            2: ("Chart shows A=30%, B=25%, C=20%, D=25%. Which is largest?", "A", ["A", "B", "C", "D"]),
+            3: ("Table: Product X=500, Y=300, Z=200. % of X in total?", "50%", ["50%", "30%", "20%", "40%"]),
+            4: ("Graph shows increasing trend. What does it indicate?", "Growth", ["Growth", "Decline", "Stability", "Volatility"]),
+            5: ("Complex data analysis with multiple variables", "45%", ["45%", "40%", "50%", "35%"])
+        },
+        "Logical Reasoning": {
+            1: ("All cats are animals. Some animals are pets. Conclusion?", "Some cats may be pets", ["Some cats may be pets", "All cats are pets", "No cat is pet", "All pets are cats"]),
+            2: ("A is B's brother. C is B's mother. How is C related to A?", "Mother", ["Mother", "Sister", "Aunt", "Grandmother"]),
+            3: ("Series: 2, 4, 8, 16, ?", "32", ["32", "24", "20", "64"]),
+            4: ("Complex syllogism with multiple statements", "Some A are B", ["Some A are B", "All A are B", "No A is B", "Some B are A"]),
+            5: ("Very complex logical puzzle", "D", ["D", "A", "B", "C"])
+        },
+        "Vocabulary": {
+            1: ("Synonym of 'happy'?", "joyful", ["joyful", "sad", "angry", "calm"]),
+            2: ("Antonym of 'fast'?", "slow", ["slow", "quick", "rapid", "swift"]),
+            3: ("Meaning of 'ubiquitous'?", "everywhere", ["everywhere", "rare", "sometimes", "never"]),
+            4: ("Word similar to 'diligent'?", "hardworking", ["hardworking", "lazy", "careless", "quick"]),
+            5: ("Complex vocabulary with context", "meticulous", ["meticulous", "careless", "simple", "ordinary"])
         }
     }
     
