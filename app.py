@@ -376,6 +376,7 @@ session_defaults = {
     "selected_categories": [],
     "user_difficulty_level": 1,  # 1-5 adaptive difficulty
     "consecutive_perfect_quizzes": 0,  # Track consecutive 100% scores at current level
+    "consecutive_failures": 0,  # Track consecutive failures for level downgrading
     "total_quizzes_at_level": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}  # Track quizzes per level
 }
 
@@ -700,20 +701,19 @@ elif st.session_state.page=="set":
     
     # Difficulty level indicator with progression info
     current_level = st.session_state.get("user_difficulty_level", 1)
-    consecutive_perfect = st.session_state.get("consecutive_perfect_quizzes", 0)
+    consecutive_good_scores = st.session_state.get("consecutive_perfect_quizzes", 0)
     
-    # Required perfect quizzes for each level
-    required_map = {1: 3, 2: 3, 3: 4, 4: 5, 5: 0}
-    required = required_map.get(current_level, 3)
+    # Required good-score quizzes for all levels (same for all)
+    required = 2
     
     st.subheader(f"🎯 Level {current_level}/5")
     
     if current_level < 5:
-        st.info(f"📈 Need {required} consecutive PERFECT (100%) quizzes to advance to Level {current_level + 1}")
-        st.write(f"Current streak: {consecutive_perfect}/{required}")
-        st.progress(min(consecutive_perfect / required, 1.0))
+        st.info(f"📈 Need {required} consecutive quizzes with >=80% score to advance to Level {current_level + 1}")
+        st.write(f"Current streak: {consecutive_good_scores}/{required}")
+        st.progress(min(consecutive_good_scores / required, 1.0))
     else:
-        st.success("🏆 MASTER LEVEL ACHIEVED! Perfect performance!")
+        st.success("🏆 MASTER LEVEL ACHIEVED! Excellent performance!")
     
     n=st.number_input("Questions (5-50)",5,50,10)
 
@@ -821,45 +821,45 @@ elif st.session_state.page=="result":
             incorrect_count += 1
             user["perf"][q["t"]]["w"]+=1
 
-    # Update adaptive difficulty based on consecutive perfect quizzes
+    # Update adaptive difficulty based on consecutive good scores (>=80% and <=100%)
     current_level = st.session_state.get("user_difficulty_level", 1)
     accuracy = correct_count / len(st.session_state.quiz) if st.session_state.quiz else 0
-    is_perfect = (accuracy == 1.0)
+    is_good_score = (accuracy >= 0.80 and accuracy <= 1.0)  # >=80% and <=100%
     
     # Track total quizzes at current level
     if "total_quizzes_at_level" not in st.session_state:
         st.session_state.total_quizzes_at_level = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
     st.session_state.total_quizzes_at_level[current_level] += 1
     
-    if is_perfect:
-        # Increment consecutive perfect counter
+    if is_good_score:
+        # Reset failure counter on good score
+        st.session_state.consecutive_failures = 0
+        
+        # Increment consecutive good score counter
         st.session_state.consecutive_perfect_quizzes += 1
         
-        # Check if ready to level up
-        required_consecutive = current_level + 2  # Level 1 needs 3, Level 2 needs 3, Level 3 needs 4, Level 4 needs 5
-        if current_level == 1:
-            required_consecutive = 3  # Need 3 perfect quizzes to reach Level 2
-        elif current_level == 2:
-            required_consecutive = 3  # Need 3 perfect quizzes to reach Level 3
-        elif current_level == 3:
-            required_consecutive = 4  # Need 4 perfect quizzes to reach Level 4
-        elif current_level == 4:
-            required_consecutive = 5  # Need 5 perfect quizzes to reach Level 5
+        # Check if ready to level up (2 consecutive >=80% quizzes for ALL levels)
+        required_consecutive = 2  # Same requirement for all levels
         
         if st.session_state.consecutive_perfect_quizzes >= required_consecutive and current_level < 5:
             new_level = current_level + 1
             st.session_state.user_difficulty_level = new_level
             st.session_state.consecutive_perfect_quizzes = 0  # Reset for next level
-            st.success(f"🎉 MASTERED Level {current_level}! Advanced to Level {new_level}/5")
+            st.success(f"🎉 Excellent! Advanced to Level {new_level}/5")
         else:
             remaining = required_consecutive - st.session_state.consecutive_perfect_quizzes
-            st.info(f"� Perfect! Level {current_level}/5 - Need {remaining} more perfect quiz to advance")
+            st.info(f"📈 Great job! {int(accuracy*100)}% - Need {remaining} more quiz with >=80% to advance")
     else:
-        # Reset consecutive counter if not perfect
-        if st.session_state.consecutive_perfect_quizzes > 0:
-            st.warning(f"📚 Streak broken! Need {required_consecutive} consecutive perfect quizzes at Level {current_level}")
+        # Reset consecutive counter but NO level downgrading
         st.session_state.consecutive_perfect_quizzes = 0
-        st.info(f"📊 Score: {int(accuracy*100)}% - Practice more to master Level {current_level}/5")
+        
+        # Show message based on score
+        if accuracy >= 0.7:
+            st.info(f"📊 Score: {int(accuracy*100)}% - Keep practicing at Level {current_level}/5")
+        elif accuracy >= 0.5:
+            st.warning(f"📊 Score: {int(accuracy*100)}% - Need >=80% on 2 consecutive quizzes to advance")
+        else:
+            st.warning(f"📚 Score: {int(accuracy*100)}% - Practice more to reach >=80%")
 
     save(users)
 
@@ -889,32 +889,23 @@ elif st.session_state.page=="progress":
     
     # Show current adaptive difficulty level
     current_level = st.session_state.get("user_difficulty_level", 1)
-    consecutive_perfect = st.session_state.get("consecutive_perfect_quizzes", 0)
+    consecutive_good_scores = st.session_state.get("consecutive_perfect_quizzes", 0)
     
-    # Calculate required for next level
-    if current_level == 1:
-        required = 3
-    elif current_level == 2:
-        required = 3
-    elif current_level == 3:
-        required = 4
-    elif current_level == 4:
-        required = 5
-    else:
-        required = 0
+    # Required good-score quizzes for all levels (same for all)
+    required = 2
     
     col1, col2, col3 = st.columns(3)
     col1.metric("Current Level", f"{current_level}/5")
-    col2.metric("Perfect Streak", f"{consecutive_perfect}/{required}")
+    col2.metric(">=80% Streak", f"{consecutive_good_scores}/{required}")
     col3.metric("Total Quizzes", user["count"])
     
     # Progress bar for next level
-    if required > 0:
-        progress = min(consecutive_perfect / required, 1.0)
+    if current_level < 5:
+        progress = min(consecutive_good_scores / required, 1.0)
         st.write(f"**Progress to Level {current_level + 1}:**")
         st.progress(progress)
-        if consecutive_perfect > 0:
-            st.info(f"Need {required - consecutive_perfect} more perfect quiz to advance")
+        if consecutive_good_scores > 0:
+            st.info(f"Need {required - consecutive_good_scores} more quiz with >=80% to advance")
     else:
         st.success("🎉 MAX LEVEL REACHED! You are an Aptitude Master!")
     
